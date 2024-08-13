@@ -1,7 +1,7 @@
 ### Update Port Speed
 This script is used to update port speed for interface provided for Prisma SDWAN sites
 
-The script will refer to the [prismasase_settings.py]()  
+The script will refer to the [prismasase_settings.py](https://github.com/ktanushree/configureportspeed/blob/main/prismasase_settings.py.example)  
 
 ### Requirements
 * Active Prisma SD-WAN Account
