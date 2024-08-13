@@ -134,32 +134,37 @@ def go():
     if sase_session.tenant_id is None:
         print("ERR: Service Account login failure. Please check client credentials")
         sys.exit()
-
-    sase_session.set_debug(2)
     ##############################################################################
     # Create Translation Dicts
     ##############################################################################
-    print("INFO: Building Translation Dicts..")
+    print("Building Translation Dicts..")
     create_dicts(sase_session=sase_session)
     sitename_list = get_sitenames(site_name)
     ##############################################################################
     # Validate Site Name
     ##############################################################################
-    valid = True
+    invalid = False
     if site_name != "ALL_SITES":
-        print("Validating Site Names:")
-        valid = validate_sitenames(sitename_list)
+        print("Validating Site Names..")
+        invalid = validate_sitenames(sitename_list)
 
-    if not valid:
+    if  invalid:
         print("ERR: One or more sites were invalid. Please provide a valid list")
         sys.exit()
 
     else:
+        print("\tVALID!")
         print("Updating Interface {} on sites provided".format(interface_name))
 
+        ##############################################################################
+        # Iterate through site list
+        ##############################################################################
         for sname in sitename_list:
             sid = site_name_id[sname]
             print("\t{}".format(sname))
+            ##############################################################################
+            # Retrieve Elements at the site
+            ##############################################################################
             data = {
                 "query_params": {
                     "site_id": {"in": [sid]}
@@ -172,28 +177,76 @@ def go():
                     print("\t\tNo elements found!")
                     continue
 
+                ##############################################################################
+                # Iterate through elements
+                ##############################################################################
                 for elem in elements:
                     print("\t\tUpdating Element: {}".format(elem["name"]))
-                    resp = sase_session.get.interfaces(site_id=sid, element_id=elem["id"])
-                    if resp.cgx_status:
-                        interfaces = resp.cgx_content.get("items", None)
-                        for intf in interfaces:
-                            if intf["name"] == interface_name:
-                                intf["ethernet_port"] = {
-                                    "full_duplex": full_duplex_val,
-                                    "speed": port_speed_val
-                                }
 
-                                resp = sase_session.put.interfaces(site_id=sid, element_id=elem["id"])
+                    ##############################################################################
+                    # Update Shell Interfaces
+                    ##############################################################################
+                    if "SHELL" in elem["serial_number"]:
+                        data = {
+                            "query_params": {
+                                "element_id": {"in": [elem["id"]]}
+                            }
+                        }
+                        resp = sase_session.post.elementshells_query(data=data)
+                        if resp.cgx_status:
+                            elementshells = resp.cgx_content.get("items", None)
+                            for elemshell in elementshells:
+                                resp = sase_session.get.elementshells_interfaces(site_id=sid, elementshell_id=elemshell["id"])
                                 if resp.cgx_status:
-                                    print("\t\t\tInterface: {} Updated".format(intf["name"]))
+                                    interfaces = resp.cgx_content.get("items", None)
+                                    for intf in interfaces:
+                                        if intf["name"] == interface_name:
+                                            intf["ethernet_port"] = {
+                                                "full_duplex": full_duplex_val,
+                                                "speed": port_speed_val
+                                            }
+
+                                            resp = sase_session.put.elementshells_interfaces(site_id=sid,
+                                                                               elementshell_id=elemshell["id"],
+                                                                               interface_id=intf["id"],
+                                                                               data=intf)
+                                            if resp.cgx_status:
+                                                print("\t\t\tShell Interface: {} Updated".format(intf["name"]))
+                                            else:
+                                                print("ERR: Could not update shell interface")
+                                                prisma_sase.jd_detailed(resp)
+
                                 else:
-                                    print("ERR: Could not update interface")
+                                    print("ERR: Could not retrieve shell interfaces")
                                     prisma_sase.jd_detailed(resp)
 
+                    ##############################################################################
+                    # Update Element Interfaces
+                    ##############################################################################
                     else:
-                        print("ERR: Could not retrieve interfaces")
-                        prisma_sase.jd_detailed(resp)
+                        resp = sase_session.get.interfaces(site_id=sid, element_id=elem["id"])
+                        if resp.cgx_status:
+                            interfaces = resp.cgx_content.get("items", None)
+                            for intf in interfaces:
+                                if intf["name"] == interface_name:
+                                    intf["ethernet_port"] = {
+                                        "full_duplex": full_duplex_val,
+                                        "speed": port_speed_val
+                                    }
+
+                                    resp = sase_session.put.interfaces(site_id=sid,
+                                                                       element_id=elem["id"],
+                                                                       interface_id=intf["id"],
+                                                                       data=intf)
+                                    if resp.cgx_status:
+                                        print("\t\t\tInterface: {} Updated".format(intf["name"]))
+                                    else:
+                                        print("ERR: Could not update interface")
+                                        prisma_sase.jd_detailed(resp)
+
+                        else:
+                            print("ERR: Could not retrieve interfaces")
+                            prisma_sase.jd_detailed(resp)
 
             else:
                 print("ERR: Could not retrieve Elements.")
