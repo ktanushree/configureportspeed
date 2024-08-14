@@ -84,6 +84,7 @@ def go():
     ############################################################################
     parser = argparse.ArgumentParser(description="{0}.".format("Prisma SD-WAN Port Speed Config Details"))
     config_group = parser.add_argument_group('Config', 'Details for the interface and sites you wish to update')
+    config_group.add_argument("--controller", "-C", help="Controller URL", default="https://api.sase.paloaltonetworks.com")
     config_group.add_argument("--site_name", "-SN", help="Comman Separated Site Names or keyword ALL_SITES", default=None)
     config_group.add_argument("--interface_name", "-IN", help="Interface Name", default=None)
     config_group.add_argument("--port_speed", "-PS", help="Port Speed. Allowed Values: 0, 10, 100, 1000", default=None)
@@ -124,10 +125,15 @@ def go():
         full_duplex_val = True
     else:
         full_duplex_val=False
+
+    controller = args.get("controller", None)
     ##############################################################################
     # Login
     ##############################################################################
-    sase_session = prisma_sase.API()
+    sase_session = prisma_sase.API(controller=controller)
+    if "qa" in controller:
+        sase_session.sase_qa_env = True
+
     sase_session.interactive.login_secret(client_id=PRISMASASE_CLIENT_ID,
                                           client_secret=PRISMASASE_CLIENT_SECRET,
                                           tsg_id=PRISMASASE_TSG_ID)
